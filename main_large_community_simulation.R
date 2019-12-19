@@ -32,8 +32,7 @@ library(Hmisc)
 library(rgdal)
 library(raster)
 library(parallel)
-# library(MuMIn) # (needed for step in occu) conflicts with randomForest
-library(randomForest) # conflicts with MuMIn
+library(randomForest) 
 library(dismo)
 library(pROC)
 library(gstat)
@@ -70,9 +69,9 @@ ir <- readOGR(dsn='../../mapping/data/', layer='ireland_coastline')
 ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 rm(ir)
 # load sample bias rasters
-load("~/Documents/Data_Analysis/UCD/sampling_distribution/saved_objects/spat_nrec_hec.RData")
+load("./spat_nrec_hec.RData")
 # load data for defining list lengths and community size
-load("~/Documents/Data_Analysis/UCD/simulation/sims_10.10/community_size_and_list_lengths.RData")
+load("./community_size_and_list_lengths.RData")
 
 
 source("./simulation_functions.R")
@@ -338,7 +337,10 @@ if(new_methods) {
     # run methods on draws for a single n.obs value
     sp_sim_sub <- subset_simulation(sp_sim, n.obs == n_obs[[i]]) %>%
       simulator::rename(paste0("sp_sim_methods_nobs", n_obs[[i]])) %>%
-      run_method(list(occ_det, occ_det + wg_block_cv),
+      run_method(list(glm_poly, glm_poly + wg_block_cv, 
+                      rf, rf + wg_block_cv, 
+                      brt, brt + wg_block_cv, 
+                      idw_interp, idw_interp + wg_block_cv),
                  parallel = list(socket_names = n_cores,
                                  libraries = c("wgutil", "Hmisc", "rgdal",
                                                "raster", "tidyverse",
@@ -348,7 +350,6 @@ if(new_methods) {
                                                "pROC", 
                                                "gstat", 
                                                "unmarked", 
-                                               #"MuMIn", # masks from randomForest
                                                "simulator"))) 
     print(paste0("\nFinished methods with n.obs = ", n_obs[[i]]))
   }
