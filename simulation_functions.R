@@ -1,7 +1,7 @@
 ##############################
 ## Define functions for simulating species and drawing samples from the 
 ## simulated distributions.  
-## Simulation 10.10
+## Simulation 10.11
 ## 
 ##
 ## notes: - because I need list length, but don't want to be able to simulate
@@ -12,7 +12,7 @@
 ##
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 24 Sep 2018
-## last modified: 1 Nov 2018
+## last modified: 25 March 2020
 ##############################
 
 simulate_fun <- function(community.size = NULL, n.obs = NULL, 
@@ -23,7 +23,7 @@ simulate_fun <- function(community.size = NULL, n.obs = NULL,
                          sl.coef.min = NULL, sl.coef.max = NULL, 
                          pca = TRUE, bias.rasters = NULL, bias.name = NULL, 
                          list.lengths = NULL, 
-                         env.predictors = NULL, squared.predictors = NULL, 
+                         env.predictors = NULL, predictors.for.models = NULL, 
                          error.prob = 0, randomPoints.replace = NULL, 
                          on.sonic = NULL, nsim = NULL) {
   # this function must return a list of length nsim where each element is a df 
@@ -35,19 +35,20 @@ simulate_fun <- function(community.size = NULL, n.obs = NULL,
   # observations for all species inside the result returned for each individual
   # species.  This should save a lot of memory. 
 
-  # tif path for use as irish_hec_raster in simulate_fun
-  if(on_sonic) tif.path <- "../data/eobs/IE_10km_hecs_raster.tif" 
-  if(!on_sonic) tif.path <- "~/Documents/Data_Analysis/UCD/predictor_variables/eobs/IE_10km_hecs_raster.tif"
+  # # tif path for use as irish_hec_raster in simulate_fun
+  # if(on_sonic) tif.path <- "../data/eobs/IE_10km_hecs_raster.tif" 
+  # if(!on_sonic) tif.path <- "~/Documents/Data_Analysis/UCD/predictor_variables/eobs/IE_10km_hecs_raster.tif"
 
   ## restore bias.raster to raster
   bias.raster <- bias.rasters[[which(names(bias.rasters) == bias.name)]]
   
   if(any(!is.raster(bias.raster))) {
     warning("bias.rasters are not actually rasters because of hash issue.  Quick fix implemented here, but if I keep this I should pass all the relevant parts of this as arguments into simulate_fun().")
-    # template raster
-    irish_hec_raster <- raster::raster(tif.path)
-    irish_hec_raster <- projectRaster(from = irish_hec_raster, 
-                                      crs = CRS("+init=epsg:29903"))
+    # make 10km square template raster
+    irish_hec_raster <- raster(xmn = -60000, xmx = 450000, ymn = -70000, 
+                               ymx = 550000, 
+                               crs = CRS("+init=epsg:29903"), vals = 1)
+    res(irish_hec_raster) <- 10000
     bias.raster <- make_spatial(bias.raster, temp_rast = irish_hec_raster, 
                                 field = "layer")
     bias.raster <- raster::mask(bias.raster, mask = ir_TM75)
@@ -72,6 +73,7 @@ simulate_fun <- function(community.size = NULL, n.obs = NULL,
                               sl.coef.min = sl.coef.min, 
                               sl.coef.max = sl.coef.max, pca = pca, 
                               env.predictors = env.predictors,
+                              predictors.for.models = predictors.for.models, 
                               error.prob = error.prob, 
                               community.size = community.size)
   
@@ -141,6 +143,7 @@ make_all_species <- function(shape = shape, n.sp = NULL, ...) {
   sp_names <- paste0(rep("sp", n.sp), 1:n.sp) # make species names
   sp <- lapply(sp_names, FUN = make_sp_response, 
                env.predictors = env.predictors, 
+               predictors.for.models = predictors.for.models, 
                pca = pca, shape = shape, polynomial.resp = polynomial.resp, 
                polynomial.coef.min = polynomial.coef.min, 
                polynomial.coef.max = polynomial.coef.max, 
@@ -455,9 +458,6 @@ make_sp_response <- function(sp.name = NULL, env.predictors = NULL, pca = TRUE,
   s # return the final object
 }
 ### end make_sp_response -------------------------------------------------------
-
-
-# list2env(sim_params, envir = environment()) # TODO what is this doing and where does it belong?
 
 ## Functions to Create True Distribution Maps -------------------------------
 make_truth_map <- function(prob_occ_rast) {

@@ -7,37 +7,35 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 5 Sep 2019
-## last modified: 7 Oct 2019
+## last modified: 10 April 2020
 ############################################
 
 # no need to set working directory or load packages as that is done in main.R
 # library(mgcv)
 # library(DHARMa)
 
-k <- 7
+k <- 5
 
 ### load data -----------------------------------------------------------------
 # optionally, read in a .csv with auc results from simulation
-ev_df <- read_csv("./bryophyte_template_evals_24Sep2019.csv")
-df_butt <- read_csv("../sims_10.10_bryophyte_butterflyBias/bryophyte_template_butterfly_bias_evals_12Sep2019.csv")
-ev_df <- bind_rows(ev_df, df_butt)
+ev_df <- read_csv("./bryophyte_template_evals_10April2020.csv")
 
 # keep only relevant columns
-ev_df <- ev_df[, colnames(ev_df) %in% c("n.obs", "bias.name", "Method", "Draw", 
-                                        "auc", "rmse", "time", 
-                                        "prevalence", "n_obs_per_sp")]
+ev_df <- ev_df[, colnames(ev_df) %in% 
+                 c("n.obs", "bias.name", "Method", "Draw", 
+                   "auc", "rmse", "time", 
+                   "prevalence", "n_obs_per_sp")]
 
 # subset to only block CV results
 ev_df_cv <- ev_df[which(ev_df$Method %in% c("glm_poly_wg_block_cv", 
-                                            "random_forest_wg_block_cv", 
                                             "brt_wg_block_cv", 
                                             "idw_interp_wg_block_cv")), ]
 
 ev_df_cv$bias.name <- factor(ev_df_cv$bias.name, 
                              levels = c("no_bias", "least_birdNBDC", 
-                                        "moderate_bryBBS", "butterflyNBDC", 
+                                        "median_butterflyNBDC", 
                                         "extreme_mothNBDC"), 
-                             labels = c("no bias", "bird", "bry", 
+                             labels = c("no bias", "bird",  
                                         "butterfly", "moth"))
 ### end load data -------------------------------------------------------------
 
@@ -75,7 +73,8 @@ auc_idwi <- gam(auc ~ bias.name +
                family = betar(link = "logit"))
 auc_idwi
 gam.check(auc_idwi) # minor fanning in fitted vs. resids plot.  
-# edf and k-index ok, despite significant p-values
+# edf and k-index ok, despite significant p-values.  Nothing much changes if I 
+# increase k to 6.  
 plot(auc_idwi, pages = 1, all.terms = T)
 
 
@@ -91,30 +90,17 @@ auc_gam_brt
 gam.check(auc_gam_brt) # edf and k-index ok.  
 plot(auc_gam_brt, pages = 1, all.terms = T)
 
-## fit only random forest ----------------------------------------------------
-auc_rf <- gam(auc ~ bias.name + 
-                 s(n_obs_per_sp, 
-                   by = bias.name, 
-                   k = k, bs = "cr"), 
-               data = ev_df_cv[!is.na(ev_df_cv$auc) & 
-                                 ev_df_cv$Method == "random_forest_wg_block_cv", ], 
-               family = betar(link = "logit"))
-auc_rf
-gam.check(auc_rf) # fanning in fitted v. resids plot.  efs and k-index ok.  
-plot(auc_rf, pages = 1, all.terms = T)
-
 ### generate AUC predictions to use in plotting
-nobs_range <- 1:158 # set up range of n_obs_per_sp values
-newdata <- data.frame(n_obs_per_sp = rep(nobs_range, 5), 
+nobs_range <- 2:200 # set up range of n_obs_per_sp values
+newdata <- data.frame(n_obs_per_sp = rep(nobs_range, 4), 
                       bias.name = c(rep("no bias", length(nobs_range)), 
                                     rep("bird", length(nobs_range)), 
-                                    rep("bry", length(nobs_range)), 
                                     rep("butterfly", length(nobs_range)), 
                                     rep("moth", length(nobs_range))))
 newdata$bias.name <- factor(newdata$bias.name, 
-                            levels = c("no bias", "bird", "bry", 
+                            levels = c("no bias", "bird", 
                                        "butterfly", "moth"), 
-                            labels = c("no bias", "bird", "bry", 
+                            labels = c("no bias", "bird",  
                                        "butterfly", "moth"))
 
 # predictions when using a GLM SDM
@@ -122,12 +108,6 @@ preds_glm <- newdata
 preds_glm$pred_auc <- predict(auc_glm, newdata = newdata, 
                               type = "response")
 preds_glm$method <- "glm"
-
-# predictions when using a Random Forest SDM
-preds_rf <- newdata
-preds_rf$pred_auc <- predict(auc_rf, newdata = newdata, 
-                              type = "response")
-preds_rf$method <- "rf"
 
 # predictions when using an inverse distance-weighted interpolation SDM
 preds_idwi <- newdata
@@ -142,27 +122,27 @@ preds_brt$pred_auc <- predict(auc_gam_brt, newdata = newdata,
 preds_brt$method <- "brt"
 
 # bind all preditions into a single data frame
-preds_auc_gam <- bind_rows(preds_glm, preds_rf, preds_idwi, preds_brt)
+preds_auc_gam <- bind_rows(preds_glm, preds_idwi, preds_brt)
 
 # add simpson evenness values to predictions
 temp_evenness <- evenness[evenness$taxon %in% c("insect - moth", 
                                                 "insect - butterfly", 
-                                                "bry_BBS", "bird"), 
-                          colnames(evenness) %in% c("taxon", "simpson_evenness")]
+                                                "bird"), 
+                          colnames(evenness) %in% c("taxon", 
+                                                    "simpson_evenness")]
 temp_evenness[nrow(temp_evenness) + 1, ] <- c("no bias", 1)
 temp_evenness$taxon[temp_evenness$taxon == "insect - moth"] <- "moth"
 temp_evenness$taxon[temp_evenness$taxon == "insect - butterfly"] <- "butterfly"
-temp_evenness$taxon[temp_evenness$taxon == "bry_BBS"] <- "bry"
-preds_auc_gam <- left_join(preds_auc_gam, temp_evenness, by = c("bias.name" = "taxon"))
+preds_auc_gam <- left_join(preds_auc_gam, temp_evenness, 
+                           by = c("bias.name" = "taxon"))
 
 
 ## construct adjusted R2 variable importance table
 var_imp_r2 <- data.frame(variable = c("full_model", "-sample_size", 
                                       "-spatial_bias"), 
-                         R2_glm = NA, R2_rf = NA, R2_idwi = NA, R2_brt = NA)
+                         R2_glm = NA, R2_idwi = NA, R2_brt = NA)
 # fill in values for full models (all methods)
 var_imp_r2[1, 2:ncol(var_imp_r2)] <- round(c(summary(auc_glm)$r.sq, 
-                                       summary(auc_rf)$r.sq, 
                                        summary(auc_idwi)$r.sq, 
                                        summary(auc_gam_brt)$r.sq), digits = 2)
 
@@ -170,11 +150,6 @@ var_imp_r2[1, 2:ncol(var_imp_r2)] <- round(c(summary(auc_glm)$r.sq,
 auc_glm_noSampSize <- gam(auc ~ bias.name, 
                           data = ev_df_cv[!is.na(ev_df_cv$auc) & 
                                             ev_df_cv$Method == "glm_poly_wg_block_cv", ], 
-                          family = betar(link = "logit"), 
-                          select = TRUE)
-auc_rf_noSampSize <- gam(auc ~ bias.name, 
-                          data = ev_df_cv[!is.na(ev_df_cv$auc) & 
-                                            ev_df_cv$Method == "random_forest_wg_block_cv", ], 
                           family = betar(link = "logit"), 
                           select = TRUE)
 auc_idwi_noSampSize <- gam(auc ~ bias.name, 
@@ -191,11 +166,6 @@ auc_brt_noSampSize <- gam(auc ~ bias.name,
 auc_glm_noBias <- gam(auc ~ s(n_obs_per_sp, k = k, bs = "cr"), 
                       data = ev_df_cv[!is.na(ev_df_cv$auc) & 
                                         ev_df_cv$Method == "glm_poly_wg_block_cv", ], 
-                      family = betar(link = "logit"), 
-                      select = TRUE)
-auc_rf_noBias <- gam(auc ~ s(n_obs_per_sp, k = k, bs = "cr"), 
-                      data = ev_df_cv[!is.na(ev_df_cv$auc) & 
-                                        ev_df_cv$Method == "random_forest_wg_block_cv", ], 
                       family = betar(link = "logit"), 
                       select = TRUE)
 auc_idwi_noBias <- gam(auc ~ s(n_obs_per_sp, k = k, bs = "cr"), 
@@ -215,11 +185,6 @@ auc_glm_null <- gam(auc ~ 1,
                                    ev_df_cv$Method == "glm_poly_wg_block_cv", ], 
                  family = betar(link = "logit"), 
                  select = TRUE)
-auc_rf_null <- gam(auc ~ 1, 
-                   data = ev_df_cv[!is.na(ev_df_cv$auc) & 
-                                     ev_df_cv$Method == "random_forest_wg_block_cv", ], 
-                   family = betar(link = "logit"), 
-                   select = TRUE)
 auc_idwi_null <- gam(auc ~ 1, 
                      data = ev_df_cv[!is.na(ev_df_cv$auc) & 
                                        ev_df_cv$Method == "idw_interp_wg_block_cv", ], 
@@ -236,31 +201,29 @@ auc_brt_null <- gam(auc ~ 1,
 
 prop_dev_nobs_glm <- (deviance(auc_glm_null) - deviance(auc_glm_noBias)) * 
   100/deviance(auc_glm_null)
-prop_dev_nobs_rf
-prop_dev_nobs_idwi
-prop_dev_nobs_brt
-# calculate proportion of deviance explained by spatial bias variable
-prop_dev_bias_glm
-prop_dev_bias_rf
-prop_dev_bias_idwi
-prop_dev_bias_brt
+# prop_dev_nobs_rf
+# prop_dev_nobs_idwi
+# prop_dev_nobs_brt
+# # calculate proportion of deviance explained by spatial bias variable
+# prop_dev_bias_glm
+# prop_dev_bias_rf
+# prop_dev_bias_idwi
+# prop_dev_bias_brt
 
 
 
 # fill in adjusted R^2 values for models without terms
 var_imp_r2[var_imp_r2$variable == "-sample_size", 2:ncol(var_imp_r2)] <- 
   round(c(summary(auc_glm_noSampSize)$r.sq, 
-          summary(auc_rf_noSampSize)$r.sq, 
           summary(auc_idwi_noSampSize)$r.sq, 
           summary(auc_brt_noSampSize)$r.sq), digits = 2)
 var_imp_r2[var_imp_r2$variable == "-spatial_bias", 2:ncol(var_imp_r2)] <- 
   round(c(summary(auc_glm_noBias)$r.sq, 
-          summary(auc_rf_noBias)$r.sq, 
           summary(auc_idwi_noBias)$r.sq, 
           summary(auc_brt_noBias)$r.sq), digits = 2)
 var_imp_r2 # removing the sample size term results in much less variance explained.
-rm(auc_glm_noSampSize, auc_rf_noSampSize, auc_idwi_noSampSize, auc_brt_noSampSize, 
-   auc_glm_noBias, auc_rf_noBias, auc_idwi_noBias, auc_brt_noBias)
+rm(auc_glm_noSampSize, auc_idwi_noSampSize, auc_brt_noSampSize, 
+   auc_glm_noBias, auc_idwi_noBias, auc_brt_noBias)
 
 ###########################################################
 ### model RMSE
@@ -291,7 +254,7 @@ rm(auc_glm_noSampSize, auc_rf_noSampSize, auc_idwi_noSampSize, auc_brt_noSampSiz
 
 ## fit only glm -----------------------------------------------------
 # thin plate spline does not cause big changes in coefficient estimates, edf, or significance of terms
-rmse_glm <- gam(rmse ~  s(prevalence, k = 30, bs = "cr") + bias.name + 
+rmse_glm <- gam(rmse ~  s(prevalence, k = k, bs = "cr") + bias.name + 
                  s(n_obs_per_sp, 
                    by = bias.name, 
                    k = k, bs = "cr"), 
@@ -302,20 +265,9 @@ rmse_glm
 gam.check(rmse_glm) # edf and k-index look bad-ish, but increasing k gives smooths that wiggle too much at medium-high prevalences.
 plot(rmse_glm, pages = 1, all.terms = T)
 
-## fit only random forest -----------------------------------------------------
-# tp spline causes no major changes in model
-rmse_rf <- gam(rmse ~  s(prevalence, k = 30, bs = "cr") + bias.name + 
-                  s(n_obs_per_sp, by = bias.name, k = k, bs = "cr"), 
-                data = ev_df_cv[!is.na(ev_df_cv$rmse) & 
-                                  ev_df_cv$Method == "random_forest_wg_block_cv", ], 
-                family = betar(link = "logit"))
-rmse_rf
-gam.check(rmse_rf) # same issue with edf and k as in rmse_glm.  Ok.  
-plot(rmse_rf, pages = 1, all.terms = T)
-
 ## fit only inverse distance-weighted interpolation ---------------------------
 # tp spline causes no major changes in model
-rmse_idwi <- gam(rmse ~  s(prevalence, k = 30, bs = "cr") + bias.name + 
+rmse_idwi <- gam(rmse ~  s(prevalence, k = k, bs = "cr") + bias.name + 
                  s(n_obs_per_sp, by = bias.name, k = k, bs = "cr"), 
                data = ev_df_cv[!is.na(ev_df_cv$rmse) & 
                                  ev_df_cv$Method == "idw_interp_wg_block_cv", ], 
@@ -325,7 +277,7 @@ gam.check(rmse_idwi) # a few big residuals.  K issue is the same, so ok.  Removi
 plot(rmse_idwi, pages = 1, all.terms = T)
 
 ## fit only boosted classification trees ---------------------------------------
-rmse_brt <- gam(rmse ~  s(prevalence, k = 30, bs = "cr") + bias.name + 
+rmse_brt <- gam(rmse ~  s(prevalence, k = k, bs = "cr") + bias.name + 
                    s(n_obs_per_sp, by = bias.name, k = k, bs = "cr"), 
                  data = ev_df_cv[!is.na(ev_df_cv$rmse) & 
                                    ev_df_cv$Method == "brt_wg_block_cv", ], 
@@ -339,11 +291,11 @@ plot(rmse_brt, pages = 1, all.terms = T)
 # get median prevalence 
 med_prev <- median(ev_df_cv$prevalence[ev_df_cv$Method == "glm_poly_wg_block_cv" & 
                                          ev_df_cv$bias.name == "no bias" & 
-                                         ev_df_cv$n.obs == 200000], na.rm = T)
-newdata <- data.frame(n_obs_per_sp = rep(nobs_range, 5), 
+                                         ev_df_cv$n_obs_per_sp == 200], 
+                   na.rm = T)
+newdata <- data.frame(n_obs_per_sp = rep(nobs_range, 4), 
                       bias.name = c(rep("no bias", length(nobs_range)), 
                                     rep("bird", length(nobs_range)), 
-                                    rep("bry", length(nobs_range)), 
                                     rep("butterfly", length(nobs_range)), 
                                     rep("moth", length(nobs_range))), 
                       prevalence = med_prev)
@@ -352,12 +304,6 @@ preds_rmse_gam_glm <- newdata
 preds_rmse_gam_glm$pred_rmse <- predict(rmse_glm, newdata = newdata, 
                               type = "response")
 preds_rmse_gam_glm$method <- "glm"
-
-# predictions when using a Random Forest SDM
-preds_rmse_gam_rf <- newdata
-preds_rmse_gam_rf$pred_rmse <- predict(rmse_rf, newdata = newdata, 
-                             type = "response")
-preds_rmse_gam_rf$method <- "rf"
 
 # predictions when using an inverse distance-weighted interpolation SDM
 preds_rmse_gam_idwi <- newdata
@@ -372,7 +318,7 @@ preds_rmse_gam_brt$pred_rmse <- predict(rmse_brt, newdata = newdata,
 preds_rmse_gam_brt$method <- "brt"
 
 # bind all preditions into a single data frame
-preds_rmse_gam <- bind_rows(preds_rmse_gam_glm, preds_rmse_gam_rf, 
+preds_rmse_gam <- bind_rows(preds_rmse_gam_glm, 
                             preds_rmse_gam_idwi, preds_rmse_gam_brt)
 
 
@@ -418,15 +364,6 @@ preds_auc_gam$pred_auc[preds_auc_gam$method == "idwi" &
   preds_auc_gam$pred_auc[preds_auc_gam$method == "idwi" & 
                        preds_auc_gam$n_obs_per_sp == 158 & 
                        preds_auc_gam$bias.name == "butterfly"] # 0.026
-
-# AUC for RF w/ butterfly bias and max nobs
-preds_auc_gam$pred_auc[preds_auc_gam$method == "rf" & 
-                     preds_auc_gam$n_obs_per_sp == 158 & 
-                     preds_auc_gam$bias.name == "butterfly"] # 0.577
-# AUC for RF w/ no bias and max nobs
-preds_auc_gam$pred_auc[preds_auc_gam$method == "rf" & 
-                     preds_auc_gam$n_obs_per_sp == 158 & 
-                     preds_auc_gam$bias.name == "no bias"] # 0.508
 
 
 ## AUC median vs no bias, sample size vs. spatial bias
@@ -479,7 +416,6 @@ preds_rmse_gam$pred_rmse[preds_rmse_gam$method == "glm" &
 ## evennes metrics
 evenness$simpson_evenness[evenness$taxon == "insect - moth"] # 0.021
 evenness$simpson_evenness[evenness$taxon == "insect - butterfly"] # 0.126
-evenness$simpson_evenness[evenness$taxon == "bry_BBS"] # 0.267
 evenness$simpson_evenness[evenness$taxon == "bird"] # 0.762
 simpson_even(bias_rasters$no_bias$layer[complete.cases(
   bias_rasters$no_bias$layer)]) # 1 (no bias)
@@ -488,17 +424,5 @@ simpson_even(bias_rasters$no_bias$layer[complete.cases(
 even_ecdf <- ecdf(evenness$simpson_evenness)
 even_ecdf(evenness$simpson_evenness[evenness$taxon == "insect - moth"]) # 0.06
 even_ecdf(evenness$simpson_evenness[evenness$taxon == "insect - butterfly"]) # 0.33
-even_ecdf(evenness$simpson_evenness[evenness$taxon == "bry_BBS"]) # 0.7
 even_ecdf(evenness$simpson_evenness[evenness$taxon == "bird"]) # 1
-
-## AUC change for random forests
-# change in CV AUC when sample size goes from 20 to 80
-preds_auc_gam$pred_auc[preds_auc_gam$method == "rf" & 
-                     preds_auc_gam$n_obs_per_sp == 80 & 
-                     preds_auc_gam$bias.name == "no bias"] - 
-  preds_auc_gam$pred_auc[preds_auc_gam$method == "rf" & 
-                       preds_auc_gam$n_obs_per_sp == 20 & 
-                       preds_auc_gam$bias.name == "no bias"]
-
-
 

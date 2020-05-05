@@ -1,6 +1,6 @@
 ############################################
 ## This creates the model function that defines how to simulate data.
-## This is for simulation 10.10 (the first version using the simulator package)
+## This is for simulation 10.11 
 ##
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 24 Sep 2018
@@ -31,6 +31,7 @@ make_bio_recs_model <- function(sp.list, community.size, n.obs, n.obs.reference,
                                 sl.coef.min, sl.coef.max, pca, bias.rasters, 
                                 bias.name, 
                                 list.lengths, env.predictors, 
+                                predictors.for.models, 
                                 error.prob = 0, ...) {
 
   list2env(list(...), envir = environment())
@@ -55,7 +56,7 @@ make_bio_recs_model <- function(sp.list, community.size, n.obs, n.obs.reference,
                           bias.name = bias.name, 
                           list.lengths = list.lengths, 
                           env.predictors = env.predictors,
-                          squared.predictors = squared.predictors, 
+                          predictors.for.models = predictors.for.models,
                           randomPoints.replace = randomPoints.replace, 
                           error.prob = error.prob, 
                           on.sonic = on.sonic), 

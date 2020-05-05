@@ -1,7 +1,9 @@
 ############################################
 ## This is the main simulator file for the species simulation
-## This is for simulation 10.10 
+## This is for simulation 10.11
 ## Using bryophytes as template
+## In this version (10.11) I have fixed the variable selection for GLMs
+## (see brown notebook 24 March 2020)
 ##
 ## inputs:  * ireland_coastline shapefile
 ##          * elevation_hec_ETOPO1.RData - elevation predictor variable 
@@ -19,11 +21,10 @@
 ##          * spat_nrec_hec.RData - rasters giving sampling bias weights based
 ##              on number of records per hectad in NBDC datasets
 ##
-## TODO: figure out where to set seed
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 24 Sep 2018
-## last modified: 19 Dec 2019
+## last modified: 5 May 2020
 ############################################
 
 rm(list = ls())
@@ -31,8 +32,10 @@ library(wgutil)
 library(Hmisc)
 library(rgdal)
 library(raster)
+#library(blockCV)
 library(parallel)
-library(randomForest) 
+# library(MuMIn) # (needed for step in occu) conflicts with randomForest
+# library(randomForest) # conflicts with MuMIn
 library(dismo)
 library(pROC)
 library(gstat)
@@ -41,38 +44,88 @@ library(tidyverse)
 library(virtualspecies)
 library(simulator) # this file was created under simulator version 0.2.0
 
-new_draws <- T  # run the simulation again because parameters have been changed
-new_methods <- T
-new_evals <- T
+new_draws <- F  # run the simulation again because parameters have been changed
+new_methods <- F # run the SDM modelling methods 
+new_evals <- F # calculate AUC and RMSE for SDMs
 add_to_sim <- F # add draws or models to an existing simulation
-analyze_performance <- T
-print_plots <- T
-dbg <- F # debug
+extract_truth_maps <- F # get truth maps out of simulated object and save as a raster brick
+analyze_performance <- T # analyze the effect of sampling bias, sample size, etc.
+print_plots <- T # print plots to .jpg and .pdf files
+run_tests <- F # print some diagnostic tests to the screen
+dbg <- F # run with some debugging options
+on_laptop <- T # is this running on WG's laptop?
+on_sonic <- F # is this running on sonic?
 
 n_cores <- 1
 seed <- 10061983 + 12202018 + 1300  # wg bday + today's date + current time
 
 options("scipen" = 100, "digits" = 4) # so that file names don't contain scientific notation
 
-setwd("~/Documents/Data_Analysis/UCD/simulation/sims_10.10_bryophyte/")
-sim_dest_dir <- "./"
-
-# load data (this will need to be modified by each user)
-load("~/Documents/Data_Analysis/UCD/predictor_variables/ETOPO1/elevation_hec_ETOPO1.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/annual_precip_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/summer_tx_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/winter_tn_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/mean_pp_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/CORINE/corine_label_1_hectad.RData")
-# Load Ireland coastline
-ir <- readOGR(dsn='../../mapping/data/', layer='ireland_coastline')
-ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
-rm(ir)
-# load sample bias rasters
-load("./spat_nrec_hec.RData")
-# load data for defining list lengths and community size
-load("./community_size_and_list_lengths.RData")
-
+if(on_laptop) {
+  sim_dest_dir <- "./"
+  
+  ### prepare and load environmental data ---------------------------------------
+  if(!all(file.exists("elevation_hec_ETOPO1.rds") & 
+          file.exists("annual_precip_hectad.rds") & 
+          file.exists("summer_tx_hectad.rds") & 
+          file.exists("winter_tn_hectad.rds") &
+          file.exists("mean_pp_hectad.rds") &
+          file.exists("corine_label_1_hectad.RData"))) {
+    source("interp_elev_hec_etopo1.R")
+    source("eobs_annual_precipitation_hectad.R")
+    source("eobs_max_summer_temp_hec.R")
+    source("eobs_min_winter_temp_hec.R")
+    source("eobs_pp_hectad.R")
+    source("prep_corine.R")
+  }
+  
+  elev_hec <- readRDS("elevation_hec_ETOPO1.rds")
+  krg_mean_rr_rast <- readRDS("annual_precip_hectad.rds")
+  krg_mean_tx_rast <- readRDS("summer_tx_hectad.rds")
+  krg_mean_tn_rast <- readRDS("winter_tn_hectad.rds")
+  mean_pp_rast <- readRDS("mean_pp_hectad.rds")
+  load("corine_label_1_hectad.RData")
+  # Load Ireland coastline
+  ir <- readOGR(dsn='./data/', layer='ireland_coastline')
+  ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
+  rm(ir)
+  
+  if(!all(file.exists("spat_nrec_hec.rds") & 
+          file.exists("community_size_and_list_lengths.rds"))) {
+    # item to use from here is tab_nrec_hec
+    # This uses NBDC data that is not stored in this simulation directory
+    # After this is run once to create the .rds file, the simulation code should
+    # run without needing access to the NBDC data (which is restricted)
+    source("format_for_sampling_distribution_plotting.R")
+    source("raster_nrec_sampling_weights.R")
+    source("define_community_size_and_list_lengths.R")
+  }
+  # load sample bias rasters
+  spat_nrec_hec <- readRDS("spat_nrec_hec.rds")
+  # load data for defining list lengths and community size
+  community_list_lengths <- readRDS("community_size_and_list_lengths.rds")
+}
+if(on_sonic) {
+  setwd("~/scratch/sims_10.11/")
+  sim_dest_dir <- "./"
+  
+  elev_hec <- readRDS("elevation_hec_ETOPO1.rds")
+  krg_mean_rr_rast <- readRDS("annual_precip_hectad.rds")
+  krg_mean_tx_rast <- readRDS("summer_tx_hectad.rds")
+  krg_mean_tn_rast <- readRDS("winter_tn_hectad.rds")
+  mean_pp_rast <- readRDS("mean_pp_hectad.rds")
+  load("corine_label_1_hectad.RData")
+  # Load Ireland coastline
+  ir <- readOGR(dsn='./data/', layer='ireland_coastline')
+  ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
+  rm(ir)
+  # load sample bias rasters
+  spat_nrec_hec <- readRDS("spat_nrec_hec.rds")
+  # load data for defining list lengths and community size
+  community_list_lengths <- readRDS("community_size_and_list_lengths.rds")
+  
+  if(dbg) print(paste0("number of cores: ", n_cores))
+}
 
 source("./simulation_functions.R")
 source("./utility_functions.R")
@@ -84,12 +137,10 @@ source("./eval_functions.R")
 ## set simulation parameters --------------------------------------------------
 sim_name <- "bryophyte_template"
 lab <- "Bryophyte template"
-n_obs <- list(100, 1000, 2500, 5000, 10000, 25000, 100000, 200000) 
-nsim <- 240 # number of species to simulate.  Ideally divisible by n_cores.
-# set community size
 community_size <- community_list_lengths$bry_BBS$community_size
 list_length <- community_list_lengths$bry_BBS$list_lengths_std
-
+n_obs <- c(2, 5, 10, 50, 100, 200, 1000, 5000) * community_size #
+nsim <- 110 # number of species to simulate.  Ideally divisible by n_cores.
 ## end set simulation params --------------------------------------------------
 
 
@@ -111,7 +162,6 @@ calc_coef_from_vertex <- function(vert_x, vert_y, a) {
 ## end function definitions -----------------------------------------------
 
 ## specify bias rasters -----------------------------------------------------
-## TODO: make additional bias rasters where sampling is correlated with PC1
 # make a no-bias raster using one of the existing rasters as a template
 no_bias_rast <- spat_nrec_hec$bird$rast
 no_bias_rast <- calc(no_bias_rast, fun = function(x) {
@@ -120,10 +170,11 @@ no_bias_rast <- calc(no_bias_rast, fun = function(x) {
   x
 })
 
-bias_rasters <- list(no_bias = no_bias_rast, 
-                     extreme_mothNBDC = spat_nrec_hec$`insect - moth`$rast, 
-                     moderate_bryBBS = spat_nrec_hec$bry_BBS$rast, 
-                     least_birdNBDC = spat_nrec_hec$bird$rast)
+bias_rasters <- list(
+  no_bias = no_bias_rast, 
+  extreme_mothNBDC = spat_nrec_hec$`insect - moth`$rast, 
+  median_butterflyNBDC = spat_nrec_hec$`insect - butterfly`$rast, 
+  least_birdNBDC = spat_nrec_hec$bird$rast)
 ## TODO: 28 Sep.  Moved this next bit into simulation function for now as it 
 ## needs to be done after I re-create the rasters in the function.  Do this more
 ## elegantly if I decide to keep it that way.  Alternatively, un-comment this
@@ -133,79 +184,47 @@ bias_rasters <- list(no_bias = no_bias_rast,
 ## end specify bias rasters -------------------------------------------------
 
 ## combine all predictors into a single df ------------------------------------
-# initiate dataframe
 ## TODO: masking by ir_TM75 throws out some hectads that do have records in the
 ## real NBDC data I think (reducing total hectads from around 1003 to 840).  Do
 ## I want to somehow keep all 1003 grid cells?
-raw_pred_df <- full_join(data.frame(as(mask(krg_mean_rr_rast, ir_TM75), 
-                                       "SpatialGridDataFrame")), 
-                         data.frame(as(mask(krg_mean_tn_rast, ir_TM75), 
-                                       "SpatialGridDataFrame")), 
+pred_brick <- brick(list(
+  elev = resample(elev_hec, krg_mean_rr_rast), 
+  mean_rr = krg_mean_rr_rast, 
+  mean_tx = resample(krg_mean_tx_rast, krg_mean_rr_rast), 
+  mean_tn = resample(krg_mean_tn_rast, krg_mean_rr_rast), 
+  mean_pp = resample(mean_pp_rast, krg_mean_rr_rast), 
+  agricultural = resample(agricultural_l1_rast, krg_mean_rr_rast), 
+  artificial_surfaces = resample(artificial_surfaces_l1_rast, krg_mean_rr_rast), 
+  forest_seminatural = resample(forest_seminatural_l1_rast, krg_mean_rr_rast),
+  water = resample(water_l1_rast, krg_mean_rr_rast), 
+  wetlands = resample(wetlands_l1_rast, krg_mean_rr_rast)
+  ))
+# mask pred brick by ir_TM75 to get only Irish land cells
+pred_brick <- mask(pred_brick, ir_TM75)
+# scale and centre environmental predictors over study extent
+pred_brick <- scale(pred_brick, center = TRUE, scale = TRUE)
+
+pred_brick_sq <- pred_brick^2 # square predictors
+names(pred_brick_sq) <- paste0(names(pred_brick), "_sq")
+
+raw_pred_df <- left_join(data.frame(as(pred_brick, "SpatialGridDataFrame")),
+                         data.frame(as(pred_brick_sq, "SpatialGridDataFrame")), 
                          by = c("s1", "s2"))
+
 raw_pred_df$s1 <- round(raw_pred_df$s1) # fix number representation issues
 raw_pred_df$s2 <- round(raw_pred_df$s2)
 
-# put remaining predictors in a list
-pred_l <- c(krg_mean_tx_rast, krg_mean_pp_rast, elev_hec, agricultural_l1_rast, 
-            artificial_surfaces_l1_rast, forest_seminatural_l1_rast, 
-            water_l1_rast, wetlands_l1_rast)
-
-# add each remaining predictor to df
-for (i in 1:length(pred_l)) {
-  df <- data.frame(as(mask(pred_l[[i]], ir_TM75), 
-                      "SpatialGridDataFrame"))
-  df$s1 <- round(df$s1) # fix number representation issues
-  df$s2 <- round(df$s2)
-  raw_pred_df <- full_join(raw_pred_df, df, 
-                           by = c("s1", "s2"))
-}
-rm(df)
-
 # reorder columns to put "s1" and "s2" (grid coordinate) columns first
 new_order <- names(raw_pred_df)
-new_order <- new_order[c(2:3, 1, 4:length(new_order))]
+new_order <- new_order[c(which(new_order %in% c("s1", "s2")), 
+                         which(new_order %nin% c("s1", "s2")))]
 raw_pred_df <- raw_pred_df[, new_order]
 
-## make predictor df to use for model fitting
-# center and square predictors for using in model fitting
-sq_pred_df <- raw_pred_df
-sq_pred_df$mean_annual_rr_c <- sq_pred_df$mean_annual_rr - 
-  mean(sq_pred_df$mean_annual_rr)
-
-center <- function(x) {x - mean(x)} # function to center variables
-
-sq_pred_df <- sq_pred_df %>%
-  mutate(mean_annual_rr_c = center(mean_annual_rr), 
-         mean_winter_tn_c = center(mean_winter_tn), 
-         mean_tx_c = center(mean_tx), 
-         mean_pp_c = center(mean_pp), 
-         elevation.pred_c = center(elevation.pred), 
-         Agricultural.areas_c = center(Agricultural.areas), 
-         Artificial.surfaces_c = center(Artificial.surfaces), 
-         Forest.and.semi.natural.areas_c = 
-           center(Forest.and.semi.natural.areas), 
-         Water.bodies_c = center(Water.bodies), 
-         Wetlands_c = center(Wetlands)) %>%
-  mutate(mean_annual_rr_c_sq = mean_annual_rr_c^2, 
-         mean_winter_tn_c_sq = mean_winter_tn_c^2, 
-         mean_tx_c_sq = mean_tx_c^2, 
-         mean_pp_c_sq = mean_pp_c^2, 
-         elevation.pred_c_sq = elevation.pred_c^2, 
-         Agricultural.areas_c_sq = Agricultural.areas_c^2, 
-         Artificial.surfaces_c_sq = Artificial.surfaces_c^2, 
-         Forest.and.semi.natural.areas_c_sq = 
-           Forest.and.semi.natural.areas_c^2, 
-         Water.bodies_c_sq = Water.bodies_c^2, 
-         Wetlands_c_sq = Wetlands_c^2)
-
-
 # remove original predictors to clean workspace
-rm(year_tot_rr, year_winter_tn, year_summer_tx, elev_hec, krg_mean_rr_predict, 
-   krg_mean_rr_rast, krg_mean_tn_predict, krg_mean_tn_rast, krg_mean_tx_predict,
-   krg_mean_tx_rast, krig_mean_rr_map, krig_mean_tn_map, krig_mean_tx_map, 
+rm(elev_hec, krg_mean_rr_rast, krg_mean_tn_rast, krg_mean_tx_rast, 
    agricultural_l1_rast, artificial_surfaces_l1_rast, clc_l1_props_hecs, 
-   forest_seminatural_l1_rast, water_l1_rast, wetlands_l1_rast, pred_l, 
-   new_order, krg_mean_pp_rast, krg_mean_pp, krig_mean_pp_map)
+   forest_seminatural_l1_rast, water_l1_rast, wetlands_l1_rast, 
+   new_order, mean_pp_rast, pred_brick, pred_brick_sq)
 ## end combine predictors in to single df -----------------------------------
 
 ## calculate metrics for datasets -------------------------------------------
@@ -240,12 +259,12 @@ rm(no_bias_rast)
 
 ## @knitr init
 
-## @knitr main ----------------------------------------------------------------
-## TODO: 28 Sep. Converting bias rasters to data frames so sha1() can deal with 
-## them. This is just a quick fix to let the simulator process run.  If I end 
-## up keeping this change, will probably need to pass all the information for
-## converting it back to a raster as arguments so the dfs can be turned back in
-## to rasters inside the simulation functions. 
+## @knitr main ---------------------------------------------------------------
+## TODO: 28 Sep. Converting bias rasters to data frames so sha1() can deal 
+## with them. This is just a quick fix to let the simulator process run.  
+## If I end up keeping this change, will probably need to pass all the 
+## information for converting it back to a raster as arguments so the dfs 
+## can be turned back in to rasters inside the simulation functions. 
 bias_rasters <- lapply(bias_rasters, as.data.frame, xy = TRUE)
 
 ## run/load simulation ------------------------------------------------------
@@ -263,7 +282,6 @@ sl.coef.min <- NA
 sl.coef.max <- NA # TODO: refine slope. 0.7 and 1 might work?  values 
 pca <- TRUE 
 error.prob <- 0
-env.predictors <- raw_pred_df
 
 
 # create simulation if it doesn't yet exist.  Otherwise, load it.
@@ -289,7 +307,7 @@ if(new_draws) {
     generate_model(make_bio_recs_model, 
                    seed = seed,
                    community.size = community_size, 
-                   n.obs = n_obs,
+                   n.obs = as.list(n_obs),
                    n.obs.reference = "community", 
                    shape = shape, 
                    polynomial.resp = polynomial.resp, 
@@ -302,8 +320,9 @@ if(new_draws) {
                    bias.rasters = bias_rasters, 
                    bias.name = as.list(names(bias_rasters)), 
                    list.lengths = list_length, 
-                   env.predictors = env.predictors, 
-                   squared.predictors = sq_pred_df, 
+                   env.predictors = raw_pred_df[, which(
+                     !grepl(".*_sq", colnames(raw_pred_df))), ], 
+                   predictors.for.models = raw_pred_df, 
                    error.prob = 0, 
                    randomPoints.replace = TRUE, 
                    on.sonic = on_sonic, 
@@ -314,7 +333,8 @@ if(new_draws) {
     simulate_from_model(nsim = n_sim_per_index, 
                         index = 1:n_cores,
                         parallel = list(socket_names = n_cores,
-                                        libraries = c("wgutil", "Hmisc", "rgdal",
+                                        libraries = c("wgutil", "Hmisc", 
+                                                      "rgdal",
                                                       "raster", "tidyverse",
                                                       "virtualspecies",
                                                       "simulator"))
@@ -337,19 +357,17 @@ if(new_methods) {
     # run methods on draws for a single n.obs value
     sp_sim_sub <- subset_simulation(sp_sim, n.obs == n_obs[[i]]) %>%
       simulator::rename(paste0("sp_sim_methods_nobs", n_obs[[i]])) %>%
-      run_method(list(glm_poly, glm_poly + wg_block_cv, 
-                      rf, rf + wg_block_cv, 
-                      brt, brt + wg_block_cv, 
-                      idw_interp, idw_interp + wg_block_cv),
+      run_method(list(brt, brt + wg_block_cv),
                  parallel = list(socket_names = n_cores,
                                  libraries = c("wgutil", "Hmisc", "rgdal",
                                                "raster", "tidyverse",
                                                "virtualspecies", 
-                                               "randomForest",
+                                               #"randomForest", 
                                                "dismo", 
                                                "pROC", 
                                                "gstat", 
                                                "unmarked", 
+                                               #"MuMIn", # masks from randomForest
                                                "simulator"))) 
     print(paste0("\nFinished methods with n.obs = ", n_obs[[i]]))
   }
@@ -364,13 +382,101 @@ if(new_methods) {
   
 if(new_evals) {
   sp_sim <- evaluate(sp_sim, list(auc, rmse)) # evaluate(sp_sim, list(rmse))
+  # save(sp_sim, file = paste0(sim_dest_dir, "files/", sim_name, 
+  #                               "_evals.Rdata"))
+  # # write a .csv of performance results to use for making plots
+  # evals_df <- as.data.frame(evals(sp_sim))
+  # print(paste0("Size of model performance data frame: ", 
+  #       pryr::object_size(evals_df)))
+  # write_csv(evals_df, paste0("model_performance_results_", 
+  #                            sim_name, ".csv"))
 } else sp_sim <- load_simulation(name = sim_name, 
                                  dir = sim_dest_dir)
 
 ## end run/load simulation --------------------------------------------------
 
+if(extract_truth_maps) {
+  ## Get truth maps
+  # get draws
+  if(on_laptop) {
+    sp_sim <- load_simulation(name = sim_name, 
+                              dir = "/media/willson/Backup Plus/simulation_data/sims_10.11")
+    sp_draws <- draws(sp_sim, n.obs == 6340)
+  }
+  if(on_sonic) {
+    sp_draws <- draws(sp_sim, n.obs == 6340)
+  }
+  
+  truth_maps <- lapply(sp_draws[[1]]@draws, 
+                       FUN = function(x) x$truth_maps[[1]])
+  truth_maps <- brick(truth_maps)
+  try(saveRDS(truth_maps, "truth_maps.rds"))
+  
+  ## Get an example sample
+  sp_draws <- draws(sp_sim, n.obs == 126800)
+  # get butterfly bias draws
+  bb_sim <- load_simulation(name = "butterfly_template",
+                            dir = "/media/willson/Backup Plus/simulation_data/sims_10.11_butterfly/")
+  
+  example_obs_n63400 <- list(no_bias = sp_draws[[1]]@draws$r20.3$observations, 
+                           median_bias = sp_draws[[3]]@draws$r20.3$observations,
+                           extreme_bias = sp_draws[[2]]@draws$r20.3$observations)
+  try(saveRDS(example_obs_n63400, "example_obs_n63400.rds"))
+  try(rm(truth_maps, example_obs_n63400))
+  
+  ## Get block cv fold assignments
+  ex_refs <- unlist(output(bb_sim, methods = "glm_poly_wg_block_cv", 
+                           reference = T))
+  ex_outs <- output(bb_sim, subset = c(ex_refs[[1]]@model_name), 
+                     methods = "glm_poly_wg_block_cv", index = 1)
+  try(saveRDS(ex_outs@out$r1.1$folds_en, "example_folds.rds"))
+}
 
-### analyze performance --------------------------------------------------------
+
+
+### testing code -------------------------------------------------------------
+if(run_tests) {
+  # make sure all n.obs finished running - each draws ref should have the
+  # same length (which should be the number of cores)
+  for(i in 1:length(sim@draws_refs)) {
+    print(paste0(i, " ", length(sim@draws_refs[[i]])))
+  }
+  
+  # using subset is same as just using evals function, but perhaps faster
+  identical(evals(subset_simulation(sp_sim, n.obs == 1000)), 
+            evals(sp_sim, n.obs == 1000))
+  
+  # expect nrow to be nsim*length(bias_rasters)*number of n.obs in this subset 
+  # (may be slightly higher if nsim wasn't evenly divisible by n_cores)
+  dim(test_eval_df) 
+  names(test_evals[[1]]@evals$glm_straight_line)
+  test_eval_df[c(1, 13), ] 
+  identical(test_eval_df$Model[1], test_eval_df$Model[13])
+  
+  draw_test <- draws(sp_sim, n.obs == 6340)
+  length(draw_test)
+  # are the objects with same draw name the same virtualspecies?  They should be
+  # if the 4 draws are the 4 biases (can tell by printing draw_test and looking
+  # at the name)
+  draw_test[[1]]@draws$r1.1 
+  draw_test[[2]]@draws$r1.1
+  
+  # are the objects with the same number within each index iteration the same
+  # virtualspecies?  They should NOT be.
+  draw_test[[1]]@draws$r1.1
+  draw_test[[1]]@draws$r2.1
+  
+  draw_test_all <- draws(sp_sim_test)
+  length(draw_test_all)
+  draw_test_all[[1]]@draws$r1.1
+  draw_test_all[[7]]@draws$r1.1
+  draw_test_all[[5]]@draws$r1.1
+  draw_test_all[[5]]@draws$r2.1
+  
+}
+### end testing code ---------------------------------------------------------
+
+### analyze performance -------------------------------------------------------
 if(analyze_performance) {
   library(mgcv)
   library(dismo)
