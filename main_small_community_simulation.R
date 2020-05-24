@@ -42,18 +42,18 @@ library(tidyverse)
 library(virtualspecies)
 library(simulator) # this file was created under simulator version 0.2.0
 
-new_draws <- T  # run the simulation again because parameters have been changed
+new_draws <- F  # run the simulation again because parameters have been changed
 new_methods <- F
 new_evals <- F
 add_to_sim <- F # add draws or models to an existing simulation
 write_to_csv <- F # write prediction performance results to .csv file
 load_sim <- F # load the simulation objects (files created by the simulator package, of the virtual species and virtual species datasets) into R workspace.
 extract_truth_maps <- F # get truth maps out of simulated object and save as a raster brick
-analyze_performance <- F
-print_plots <- F
+analyze_performance <- T
+print_plots <- T
 dbg <- F
-on_laptop <- F
-on_sonic <- T
+on_laptop <- T # set to TRUE if running on a local machine
+on_sonic <- F # set to TRUE if running on the sonic computing cluster
 
 n_cores <- 22
 seed <- 10061983 + 12202018 + 1300  # wg bday + today's date + current time

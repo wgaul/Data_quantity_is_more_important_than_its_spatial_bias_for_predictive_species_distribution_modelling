@@ -837,76 +837,32 @@ simpson_even(bias_df$layer[bias_df$bias == "A" & !is.na(bias_df$layer)])
 contour_large_community # save this manually or use orca()
 contour_small_community # save this manually or use orca()
 
-ggsave("Fig1.svg", sampling_bias_maps, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("Fig3.svg", multiplot(p_dist_1, p_dist_3, p_dist_2, p_dist_4, 
-                             cols = 2), 
+## save as eps
+ggsave("Figure 1.eps", sampling_bias_maps, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("Figure 3.eps", multiplot(p_dist_1, p_dist_3, p_dist_2, p_dist_4, 
+                                 cols = 2), 
        width = 25, height = 25, units = "cm", 
-       device = "svg")
-
-ggsave("Fig4.svg", n_rmse_point, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("Fig5.svg", auc_line, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("Fig6.svg", auc_boxplot, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("Fig7.svg", rmse_cv_boxplot, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("example_sp.svg", example_sp, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("noBias_obs_map.svg", noBias_obs_map, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("median_obs_map.svg", median_obs_map, width = 25, height = 25, units = "cm", 
-       device = "svg")
-ggsave("test_points_map.svg", test_points_map, width = 25, height = 25, units = "cm", 
-       device = "svg")
-
-
-ggsave("Fig1.jpg", sampling_bias_maps, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("Fig3.jpg", multiplot(p_dist_1, p_dist_3, p_dist_2, p_dist_4, 
-                             cols = 2), 
-       width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("Fig4.jpg", n_rmse_point, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("Fig5.jpg", auc_line, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("Fig5_slideshow.jpg", auc_line_presentation, width = 25, height = 25, 
-       units = "cm", device = "jpg")
-ggsave("Fig6.jpg", auc_boxplot, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("Fig7.jpg", rmse_cv_boxplot, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("example_sp.jpg", example_sp, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("noBias_obs_map.jpg", noBias_obs_map, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("median_obs_map.jpg", median_obs_map, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("test_points_map.jpg", test_points_map, width = 25, height = 25, units = "cm", 
-       device = "jpg")
+       device = "eps")
+ggsave("Figure 4.eps", n_rmse_point, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("Figure 5.eps", auc_line, width = 25, height = 25, units = "cm", 
+       device = "eps")
+# ggsave("Fig5_slideshow.eps", auc_line_presentation, width = 25, height = 25,
+#        units = "cm", device = "eps")
+ggsave("Figure 6.eps", auc_boxplot, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("Figure 7.eps", rmse_cv_boxplot, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("example_sp.eps", example_sp, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("noBias_obs_map.eps", noBias_obs_map, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("median_obs_map.eps", median_obs_map, width = 25, height = 25, units = "cm", 
+       device = "eps")
+ggsave("test_points_map.eps", test_points_map, width = 25, height = 25, 
+       units = "cm", 
+       device = "eps")
 
 write_csv(pred_table, "predictor_variable_table.csv")
 
-
-### save plots as pdf
-pdf("Fig1.pdf")
-sampling_bias_maps
-dev.off()
-pdf("Fig3.pdf")
-multiplot(p_dist_1, p_dist_3, p_dist_2, p_dist_4, 
-          cols = 2)
-dev.off()
-pdf("Fig4.pdf")
-n_rmse_point
-dev.off()
-pdf("Fig5.pdf")
-auc_line
-dev.off()
-pdf("Fig6.pdf")
-auc_boxplot
-dev.off()
-pdf("Fig7.pdf")
-rmse_cv_boxplot
-dev.off()

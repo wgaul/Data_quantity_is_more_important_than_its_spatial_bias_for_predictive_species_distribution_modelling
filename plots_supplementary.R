@@ -841,63 +841,30 @@ rmse_summary
 
 
 #### print plots to files ----------------------------------------------------
-ggsave("S3.jpg", prevalence_auc_rmse_plot, width = 25, height = 25, 
-       units = "cm", device = "jpg")
-ggsave("S4.jpg", auc_ntest_all, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("S5.jpg", prev_hist, width = 25, height = 25, units = "cm", device = "jpg")
-ggsave("S6.jpg", rmse_line, width = 25, height = 25, 
-       units = "cm", device = "jpg")
-ggsave("S7.jpg", auc_smooth_cvNoCv, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("S8.jpg", nvar_glm_plot, width = 25, height = 25, 
-       units = "cm", device = "jpg")
-ggsave("S9.jpg", nvar_auc_glm, width = 25, height = 25, units = "cm", device = "jpg")
-ggsave("S10.jpg", n_brt_trees, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("S11.jpg", auc_ntree, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-ggsave("S12.jpg", auc_smooth_all_od, width = 25, height = 25, units = "cm", 
-       device = "jpg")
-
-
-
-## each figure as a pdf ---------------------------------------------------
-pdf("S1.pdf")
+## each figure as a pdf or eps ------------------------------------------------
+pdf("Supplemental Figure S1.pdf")
 print(## predictor variables
   plot(mask(pred_rast_brick, ir_TM75), axes = F))
 dev.off()
-pdf("S3.pdf")
-rmse_line
-dev.off()
-pdf("S4.pdf")
-prevalence_auc_rmse_plot
-dev.off()
-pdf("S5.pdf")
-auc_prevalence_bin
-dev.off()
-pdf("S6.pdf")
-auc_ntest_all
-dev.off()
-pdf("S7.pdf")
-prev_hist
-dev.off()
-pdf("S8.pdf")
-auc_smooth_cvNoCv
-dev.off()
-pdf("S9.pdf")
-nvar_glm_plot
-dev.off()
-pdf("S10.pdf")
-nvar_auc_glm
-dev.off()
-pdf("S11.pdf")
-n_brt_trees
-dev.off()
-pdf("S12.pdf")
-auc_ntree
-dev.off()
-pdf("S13.pdf")
-auc_smooth_all_od
-dev.off()
-
+# S2 is .docx of supp. methods and results
+# S3 is example checklist
+ggsave("Supplemental Figure S4.eps", prevalence_auc_rmse_plot, width = 25, 
+       height = 25, units = "cm", device = "eps")
+ggsave("Supplemental Figure S5.eps", auc_ntest_all, width = 25, height = 25, 
+       units = "cm", device = "eps")
+ggsave("Supplemental Figure S6.eps", prev_hist, width = 25, height = 25,
+       units = "cm", device = "eps")
+# S7 is a table of adjusted R2 from GAMs
+# S8 is a table of variable importance for predicting RMSE
+ggsave("Supplemental Figure S9.eps", auc_smooth_cvNoCv, width = 25, 
+       height = 25, units = "cm", device = "eps")
+ggsave("Supplemental Figure S10.eps", nvar_glm_plot, width = 25, height = 25, 
+       units = "cm", device = "eps")
+ggsave("Supplemental Figure S11.eps", nvar_auc_glm, width = 25, height = 25, 
+       units = "cm", device = "eps")
+ggsave("Supplemental Figure S12.eps", n_brt_trees, width = 25, height = 25, 
+       units = "cm", device = "eps")
+ggsave("Supplemental Figure S13.eps", auc_ntree, width = 25, height = 25, 
+       units = "cm", device = "eps")
+ggsave("Supplemental Figure S14.eps", auc_smooth_all_od, width = 25, 
+       height = 25, units = "cm", device = "eps")
