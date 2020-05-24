@@ -24,18 +24,17 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 24 Sep 2018
-## last modified: 5 May 2020
+## last modified: 22 May 2020
 ############################################
 
 rm(list = ls())
+# install.packages("devtools")
+# devtools::install_github("wgaul/wgutil") # Willson's miscelanious functions
 library(wgutil)
 library(Hmisc)
 library(rgdal)
 library(raster)
-#library(blockCV)
 library(parallel)
-# library(MuMIn) # (needed for step in occu) conflicts with randomForest
-# library(randomForest) # conflicts with MuMIn
 library(dismo)
 library(pROC)
 library(gstat)
@@ -48,13 +47,14 @@ new_draws <- F  # run the simulation again because parameters have been changed
 new_methods <- F # run the SDM modelling methods 
 new_evals <- F # calculate AUC and RMSE for SDMs
 add_to_sim <- F # add draws or models to an existing simulation
+write_to_csv <- F # write prediction performance results to .csv file
+load_sim <- F # load the simulation objects (files created by the simulator package, of the virtual species and virtual species datasets) into R workspace.
 extract_truth_maps <- F # get truth maps out of simulated object and save as a raster brick
 analyze_performance <- T # analyze the effect of sampling bias, sample size, etc.
 print_plots <- T # print plots to .jpg and .pdf files
-run_tests <- F # print some diagnostic tests to the screen
 dbg <- F # run with some debugging options
-on_laptop <- T # is this running on WG's laptop?
-on_sonic <- F # is this running on sonic?
+on_laptop <- T # set this to TRUE if running the code on a local machine
+on_sonic <- F # set to TRUE if running code on the sonic computing cluster
 
 n_cores <- 1
 seed <- 10061983 + 12202018 + 1300  # wg bday + today's date + current time
@@ -341,8 +341,8 @@ if(new_draws) {
     ) 
   save(sp_sim, file = paste0(sim_dest_dir, "files/", sim_name, 
                                 "_draws.Rdata"))
-} else sp_sim <- load_simulation(name = sim_name, 
-                                    dir = sim_dest_dir)
+} else if(load_sim) {sp_sim <- load_simulation(name = sim_name, 
+                                                      dir = sim_dest_dir)}
 
 if(new_methods) {
   ## loop through n_obs and run methods in a newly-named simulation just for 
@@ -377,21 +377,13 @@ if(new_methods) {
   save_simulation(sp_sim)
   save(sp_sim, file = paste0(sim_dest_dir, "files/", sim_name, 
                                 "_outputs.Rdata"))
-} else sp_sim <- load_simulation(name = sim_name, 
-                                 dir = sim_dest_dir)
-  
+} else if(load_sim) {sp_sim <- load_simulation(name = sim_name, 
+                                               dir = sim_dest_dir)}
+
 if(new_evals) {
   sp_sim <- evaluate(sp_sim, list(auc, rmse)) # evaluate(sp_sim, list(rmse))
-  # save(sp_sim, file = paste0(sim_dest_dir, "files/", sim_name, 
-  #                               "_evals.Rdata"))
-  # # write a .csv of performance results to use for making plots
-  # evals_df <- as.data.frame(evals(sp_sim))
-  # print(paste0("Size of model performance data frame: ", 
-  #       pryr::object_size(evals_df)))
-  # write_csv(evals_df, paste0("model_performance_results_", 
-  #                            sim_name, ".csv"))
-} else sp_sim <- load_simulation(name = sim_name, 
-                                 dir = sim_dest_dir)
+} else if(load_sim) {sp_sim <- load_simulation(name = sim_name, 
+                                               dir = sim_dest_dir)}
 
 ## end run/load simulation --------------------------------------------------
 
@@ -432,49 +424,10 @@ if(extract_truth_maps) {
   try(saveRDS(ex_outs@out$r1.1$folds_en, "example_folds.rds"))
 }
 
-
-
-### testing code -------------------------------------------------------------
-if(run_tests) {
-  # make sure all n.obs finished running - each draws ref should have the
-  # same length (which should be the number of cores)
-  for(i in 1:length(sim@draws_refs)) {
-    print(paste0(i, " ", length(sim@draws_refs[[i]])))
-  }
-  
-  # using subset is same as just using evals function, but perhaps faster
-  identical(evals(subset_simulation(sp_sim, n.obs == 1000)), 
-            evals(sp_sim, n.obs == 1000))
-  
-  # expect nrow to be nsim*length(bias_rasters)*number of n.obs in this subset 
-  # (may be slightly higher if nsim wasn't evenly divisible by n_cores)
-  dim(test_eval_df) 
-  names(test_evals[[1]]@evals$glm_straight_line)
-  test_eval_df[c(1, 13), ] 
-  identical(test_eval_df$Model[1], test_eval_df$Model[13])
-  
-  draw_test <- draws(sp_sim, n.obs == 6340)
-  length(draw_test)
-  # are the objects with same draw name the same virtualspecies?  They should be
-  # if the 4 draws are the 4 biases (can tell by printing draw_test and looking
-  # at the name)
-  draw_test[[1]]@draws$r1.1 
-  draw_test[[2]]@draws$r1.1
-  
-  # are the objects with the same number within each index iteration the same
-  # virtualspecies?  They should NOT be.
-  draw_test[[1]]@draws$r1.1
-  draw_test[[1]]@draws$r2.1
-  
-  draw_test_all <- draws(sp_sim_test)
-  length(draw_test_all)
-  draw_test_all[[1]]@draws$r1.1
-  draw_test_all[[7]]@draws$r1.1
-  draw_test_all[[5]]@draws$r1.1
-  draw_test_all[[5]]@draws$r2.1
-  
+if(write_to_csv) {
+  # write prediction performance results to a .csv file
+  source("write_to_csv.R")
 }
-### end testing code ---------------------------------------------------------
 
 ### analyze performance -------------------------------------------------------
 if(analyze_performance) {

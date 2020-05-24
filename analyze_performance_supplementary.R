@@ -8,7 +8,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 24 Sep 2019
-## last modified: 27 April 2020
+## last modified: 22 May 2020
 ############################################
 
 # no need to set working directory or load packages as that is done in main.R
@@ -37,7 +37,7 @@ ev_df <- ev_df[ev_df$Method %nin% c("random_forest_wg_block_cv",
                                     "occ_det_wg_block_cv"), ]
 
 ## small community simulation results
-od_ev_df <- read_csv("../sims_10.11_butterfly/butterfly_template_evals_17April.csv")
+od_ev_df <- read_csv("./butterfly_template_evals_17April.csv")
 
 # keep only relevant columns
 od_ev_df <- od_ev_df[, colnames(od_ev_df) %in% c("n.obs", "bias.name", "Method", 

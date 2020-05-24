@@ -29,7 +29,6 @@ if(!on_sonic) {
   sim_dest_dir <- "."
 }
 if(on_sonic) {
-  # setwd("~/scratch/sims_10.11/")
   sim_dest_dir <- "./"
 }
 

@@ -8,7 +8,7 @@
 ## 
 ## author: Willson Gaul wgaul@hotmail.com
 ## created: 4 Oct 2019
-## last modified: 10 April 2020
+## last modified: 22 May 2020
 ############################################
 
 # no need to set working directory or load packages as that is done in main.R

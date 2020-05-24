@@ -14,13 +14,11 @@
 ############################################
 
 library(wgutil)
-#library(skimr)
 library(Hmisc)
 library(rgdal)
 library(raster)
 library(parallel)
 library(pROC)
-# library(akima)
 library(tidyverse)
 library(plotly)
 
@@ -39,7 +37,7 @@ ev_df_cv <- ev_df[which(ev_df$Method %in% c("glm_poly_wg_block_cv",
                                             "idw_interp_wg_block_cv")), ]
 
 ## small community simulation results
-od_ev_df <- read_csv("../sims_10.11_butterfly/butterfly_template_evals_17April.csv")
+od_ev_df <- read_csv("./butterfly_template_evals_17April.csv")
 
 # remove methods that did not fully run (see simulation_tracking_status.ods)
 od_ev_df <- od_ev_df[od_ev_df$Method %in% c("glm_poly", "glm_poly_wg_block_cv", 
@@ -61,38 +59,38 @@ line_size <- 1.5
 c_f = 1 # coord fixed for plots
 
 
-## load predictor variables
-load("~/Documents/Data_Analysis/UCD/predictor_variables/ETOPO1/elevation_hec_ETOPO1.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/annual_precip_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/summer_tx_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/winter_tn_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/eobs/mean_pp_hectad.RData")
-load("~/Documents/Data_Analysis/UCD/predictor_variables/CORINE/corine_label_1_hectad.RData")
+### load environmental predictor data ------------------------------------------
+elev_hec <- readRDS("elevation_hec_ETOPO1.rds")
+krg_mean_rr_rast <- readRDS("annual_precip_hectad.rds")
+krg_mean_tx_rast <- readRDS("summer_tx_hectad.rds")
+krg_mean_tn_rast <- readRDS("winter_tn_hectad.rds")
+mean_pp_rast <- readRDS("mean_pp_hectad.rds")
+load("corine_label_1_hectad.RData")
 # Load Ireland coastline
-ir <- readOGR(dsn='../../mapping/data/', layer='ireland_coastline')
+ir <- readOGR(dsn='./data/', layer='ireland_coastline')
 ir_TM75 <- spTransform(ir, CRS("+init=epsg:29903"))
 rm(ir)
 
 pred_rast_brick <- brick(list(
-  "minimum temperature" = resample(krg_mean_tn_rast, krg_mean_rr_rast), 
-  "maximum temperature" = resample(krg_mean_tx_rast, krg_mean_rr_rast), 
-  "annual precipitation" = krg_mean_rr_rast, 
-  "atmospheric pressure" = resample(krg_mean_pp_rast, krg_mean_rr_rast), 
-  "agricultural areas" = resample(agricultural_l1_rast, krg_mean_rr_rast), 
-  "artificial surfaces" = resample(artificial_surfaces_l1_rast, krg_mean_rr_rast), 
+  "minimum temperature" = resample(krg_mean_tn_rast, krg_mean_rr_rast),
+  "maximum temperature" = resample(krg_mean_tx_rast, krg_mean_rr_rast),
+  "annual precipitation" = krg_mean_rr_rast,
+  "atmospheric pressure" = resample(mean_pp_rast, krg_mean_rr_rast),
+  "agricultural areas" = resample(agricultural_l1_rast, krg_mean_rr_rast),
+  "artificial surfaces" = resample(artificial_surfaces_l1_rast, krg_mean_rr_rast),
   "forest/semi-natural" = resample(forest_seminatural_l1_rast, krg_mean_rr_rast),
-  "wetlands" = resample(wetlands_l1_rast, krg_mean_rr_rast), 
-  "water bodies" = resample(water_l1_rast, krg_mean_rr_rast), 
+  "wetlands" = resample(wetlands_l1_rast, krg_mean_rr_rast),
+  "water bodies" = resample(water_l1_rast, krg_mean_rr_rast),
   "elevation" = resample(elev_hec, krg_mean_rr_rast)))
 
-rm(krg_mean_pp, krg_mean_pp_rast, krg_mean_rr_predict, krg_mean_rr_rast, 
-   krg_mean_tn_predict, krg_mean_tn_rast, krg_mean_tx_predict, krg_mean_tx_rast, 
-   agricultural_l1_rast, artificial_surfaces_l1_rast, forest_seminatural_l1_rast, 
+rm(krg_mean_pp, krg_mean_pp_rast, krg_mean_rr_predict, krg_mean_rr_rast,
+   krg_mean_tn_predict, krg_mean_tn_rast, krg_mean_tx_predict, krg_mean_tx_rast,
+   agricultural_l1_rast, artificial_surfaces_l1_rast, forest_seminatural_l1_rast,
    wetlands_l1_rast, water_l1_rast, elev_hec)
 
 ### plot sampling biases ------------------------------------------------------
 # load sample bias rasters
-load("~/Documents/Data_Analysis/UCD/sampling_distribution/saved_objects/spat_nrec_hec.RData")
+spat_nrec_hec <- readRDS("spat_nrec_hec.rds")
 
 bias_df <- bias_rasters
 # set value for no bias map to 1 in each cell. 
@@ -836,12 +834,6 @@ nbdc # this shows evenness values for NBDC template datasets
 simpson_even(bias_df$layer[bias_df$bias == "A" & !is.na(bias_df$layer)])
 
 #### print pdf -------------------------------------------------------------
-pdf("plots_main_text.pdf")
-print(sampling_bias_maps)
-print(n_rmse_point)
-print(auc_line)
-print(auc_boxplot)
-dev.off()
 contour_large_community # save this manually or use orca()
 contour_small_community # save this manually or use orca()
 
